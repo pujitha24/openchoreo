@@ -289,6 +289,12 @@ func makeCiliumComponentPolicies(params ComponentPolicyParams) []map[string]any 
 		})
 	}
 
+	// Cilium rejects an empty ingress list as invalid. A single empty rule enables
+	// default-deny for ingress without allowing any traffic.
+	if len(ingressRules) == 0 {
+		ingressRules = append(ingressRules, map[string]any{})
+	}
+
 	policyName := fmt.Sprintf("openchoreo-%s", params.ComponentName)
 	if len(policyName) > dpkubernetes.MaxResourceNameLength {
 		policyName = dpkubernetes.GenerateK8sNameWithLengthLimit(
