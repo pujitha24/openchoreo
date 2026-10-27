@@ -81,6 +81,7 @@ func TestUpdateResource_AuthzCheck(t *testing.T) {
 	t.Run("allowed", func(t *testing.T) {
 		pdp := testutil.AllowPDP()
 		mockSvc := mocks.NewMockService(t)
+		mockSvc.On("GetResource", mock.Anything, authzNamespace, "my-r").Return(newResourceFixture("my-r"), nil)
 		mockSvc.On("UpdateResource", mock.Anything, authzNamespace, resource).Return(resource, nil)
 		svc := newAuthzSvc(pdp, mockSvc)
 		result, err := svc.UpdateResource(testutil.AuthzContext(), authzNamespace, resource)
@@ -91,12 +92,39 @@ func TestUpdateResource_AuthzCheck(t *testing.T) {
 		require.Equal(t, "ns-a/postgres", pdp.Captured[0].Context.Resource.ResourceType)
 	})
 
+	t.Run("authorizes against stored object not request body", func(t *testing.T) {
+		pdp := testutil.AllowPDP()
+		body := newResourceFixture("my-r")
+		body.Spec.Owner.ProjectName = "other-proj"
+		body.Spec.Type.Name = "other-type"
+		mockSvc := mocks.NewMockService(t)
+		mockSvc.On("GetResource", mock.Anything, authzNamespace, "my-r").Return(newResourceFixture("my-r"), nil)
+		mockSvc.On("UpdateResource", mock.Anything, authzNamespace, body).Return(body, nil)
+		svc := newAuthzSvc(pdp, mockSvc)
+		_, err := svc.UpdateResource(testutil.AuthzContext(), authzNamespace, body)
+		require.NoError(t, err)
+		require.Len(t, pdp.Captured, 1)
+		testutil.RequireEvalRequest(t, pdp.Captured[0], "resource:update", "resource", "my-r", projectHierarchy("my-r"))
+		require.Equal(t, "ns-a/postgres", pdp.Captured[0].Context.Resource.ResourceType)
+	})
+
 	t.Run("denied", func(t *testing.T) {
 		pdp := testutil.DenyPDP()
 		mockSvc := mocks.NewMockService(t)
+		mockSvc.On("GetResource", mock.Anything, authzNamespace, "my-r").Return(newResourceFixture("my-r"), nil)
 		svc := newAuthzSvc(pdp, mockSvc)
 		_, err := svc.UpdateResource(testutil.AuthzContext(), authzNamespace, resource)
 		require.ErrorIs(t, err, services.ErrForbidden)
+	})
+
+	t.Run("not found bypasses authz", func(t *testing.T) {
+		pdp := testutil.AllowPDP()
+		mockSvc := mocks.NewMockService(t)
+		mockSvc.On("GetResource", mock.Anything, authzNamespace, "my-r").Return(nil, ErrResourceNotFound)
+		svc := newAuthzSvc(pdp, mockSvc)
+		_, err := svc.UpdateResource(testutil.AuthzContext(), authzNamespace, resource)
+		require.ErrorIs(t, err, ErrResourceNotFound)
+		require.Empty(t, pdp.Captured)
 	})
 }
 
