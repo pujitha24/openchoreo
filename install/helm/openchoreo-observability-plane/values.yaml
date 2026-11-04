@@ -78,11 +78,13 @@ networkPolicy:
   # description: app.kubernetes.io/name values allowed unrestricted ingress
   # items:
   #   type: string
-  # default: [gateway-default, opentelemetry-collector]
+  # default: [gateway-default, opentelemetry-collector, kube-prometheus-stack-prometheus-operator]
   # @schema
   unrestrictedIngressAppNames:
     - gateway-default
     - opentelemetry-collector
+    # prometheus-operator admission webhooks are called by the API server, which is not a pod in this namespace
+    - kube-prometheus-stack-prometheus-operator
 
   # @schema
   # type: array
